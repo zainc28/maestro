@@ -1,24 +1,21 @@
 /**
- * coaching-engine.js — Maestro
+ * coaching-engine.js — Maestro v3
  * ============================================================
- * COACHING MODULE — pure logic, zero rendering dependencies.
+ * COACHING MODULE — simplified, robust, geometry + time based.
  *
- * Takes an array of 33 MediaPipe pose landmarks and returns a
- * CoachingState object that the renderer and UI can consume.
+ * v3 approach: no velocity thresholds, no const-in-switch bugs.
+ * Uses only wrist position relative to landmarks + elapsed time.
  *
- * Swing phases detected:
- *   IDLE         → no arm movement detected
- *   READY        → racket arm raised, elbow bent (preparing)
- *   BACKSWING    → wrist moving backward / upward
- *   CONTACT      → arm near full extension (simulated contact)
- *   FOLLOW_THROUGH → wrist continuing across body after contact
- *
- * To replace this with a more sophisticated ML model later,
- * just keep the same analyse(landmarks) → CoachingState interface.
+ * Phases:
+ *   IDLE           → wrist at or below hip level
+ *   READY          → wrist above hip, arm raised
+ *   BACKSWING      → wrist moved ≥5% laterally from ready position
+ *   CONTACT        → auto-triggered 0.8s after BACKSWING starts
+ *   FOLLOW THROUGH → wrist has moved ≥10% horizontally from contact point
  * ============================================================
  */
 
-// ── Landmark indices (MediaPipe BlazePose 33-keypoint model) ────
+// ── Landmark indices ─────────────────────────────────────────
 export const LMKS = {
     LEFT_SHOULDER: 11,
     RIGHT_SHOULDER: 12,
@@ -30,7 +27,7 @@ export const LMKS = {
     RIGHT_HIP: 24,
 };
 
-// ── Phase enum ───────────────────────────────────────────────────
+// ── Phase names ──────────────────────────────────────────────
 export const Phase = {
     IDLE: 'IDLE',
     READY: 'READY',
@@ -39,234 +36,237 @@ export const Phase = {
     FOLLOW_THROUGH: 'FOLLOW THROUGH',
 };
 
-// ── Thresholds (tune these for your coaching style) ─────────────
-const ELBOW_READY_ANGLE_MIN = 50;    // deg — elbow must be bent at least this much
-const ELBOW_CONTACT_ANGLE_MAX = 35;    // deg — nearly straight at contact point
-const WRIST_VELOCITY_SWING = 0.005; // px/ms threshold to consider "in swing"
-const FOLLOW_THROUGH_DIST = 0.20;  // wrist must have crossed body by 20% of width
-
-/**
- * CoachingState — returned by CoachingEngine.analyse() every frame.
- * @typedef {{
- *   phase:        string,
- *   score:        number,    // 0-100
- *   color:        string,    // 'green' | 'yellow' | 'red' | 'cyan'
- *   message:      string,    // coaching text for HUD
- *   swingCount:   number,    // total completed swings this session
- *   armLandmarks: object,    // convenience carry-through for renderer
- * }} CoachingState
- */
+// ── Tunable constants ────────────────────────────────────────
+// All distances are in MediaPipe normalised units (0 = left edge, 1 = right edge).
+const READY_MAX_WRIST_Y_OFFSET = 0.05;  // wrist must be at most 5% below shoulder y
+const BACKSWING_DIST = 0.04;  // wrist travels ≥4% of width to start backswing
+const CONTACT_DELAY_MS = 700;   // ms after BACKSWING starts → auto-advance to CONTACT
+const FOLLOW_DIST = 0.06;  // wrist travels ≥6% from contact pos → follow-through
+const FOLLOW_TIMEOUT_MS = 1500;  // if wrist doesn't reach follow dist, still score after this
+const RESET_DELAY_MS = 1200;  // how long FOLLOW THROUGH stays on screen before reset
+const HISTORY_MAX = 90;    // frames kept in wrist history
 
 // ─────────────────────────────────────────────────────────────
 export class CoachingEngine {
     constructor() {
-        // State machine
         this.phase = Phase.IDLE;
-        this.prevPhase = Phase.IDLE;
         this.swingCount = 0;
         this.lastScore = 0;
 
-        // Per-swing metrics
-        this._contactAngle = 0;
-        this._followThroughReached = false;
-        this._swingStartWristX = null;
+        this._phaseStart = performance.now();
+        this._readyWristPos = null;  // {x, y} when READY was entered
+        this._contactWristPos = null;  // {x, y} at moment of CONTACT
+        this._peakElbow = 0;     // max elbow angle during swing (proxy for extension)
+        this._lastWristSpeed = 0;     // smoothed speed for display
 
-        // Wrist position history (ring buffer, last 90 frames ≈ 3s at 30fps)
-        this._wristHistory = [];
-        this._historyMax = 90;
-
-        // Last frame timestamp for velocity calc
-        this._lastTimestamp = performance.now();
+        this._wristHistory = [];         // [{x, y, t}]
     }
 
     /**
-     * Main entry point — call every frame with the 33 landmarks.
-     * @param {Array|null} landmarks  – normalised [{x,y,z,visibility}]
-     * @returns {CoachingState}
+     * Analyse one frame. Returns CoachingState.
+     * @param {Array|null} landmarks  – 33 MediaPipe landmark objects
      */
     analyse(landmarks) {
         const now = performance.now();
-        const dt = now - this._lastTimestamp;
-        this._lastTimestamp = now;
 
-        // ── No pose detected ───────────────────────────────────────
+        // ── No pose ──────────────────────────────────────────────
         if (!landmarks) {
-            return this._state(Phase.IDLE, 0, 'cyan', '🎾 Position yourself in view', null);
+            this.phase = Phase.IDLE;
+            this._phaseStart = now;
+            return this._out('cyan', '🎾 Step into view to start', null);
         }
 
-        // ── Extract the arm landmarks we care about ────────────────
-        // We coach the RIGHT arm (player's primary hitting arm).
-        // Mirror by checking which shoulder is more "dominant" (higher y = lower on screen).
+        // ── Extract limb landmarks ────────────────────────────────
+        const lw = landmarks[LMKS.LEFT_WRIST];
+        const rw = landmarks[LMKS.RIGHT_WRIST];
         const ls = landmarks[LMKS.LEFT_SHOULDER];
         const rs = landmarks[LMKS.RIGHT_SHOULDER];
         const le = landmarks[LMKS.LEFT_ELBOW];
         const re = landmarks[LMKS.RIGHT_ELBOW];
-        const lw = landmarks[LMKS.LEFT_WRIST];
-        const rw = landmarks[LMKS.RIGHT_WRIST];
+        const lh = landmarks[LMKS.LEFT_HIP];
+        const rh = landmarks[LMKS.RIGHT_HIP];
 
-        // Pick the arm that is raised higher in frame (lower y value)
-        // This auto-selects regardless of camera mirror direction
-        const useLeft = lw.y < rw.y && lw.visibility > 0.5;
+        // Auto-select the arm that is higher in frame (lower y = higher on screen).
+        // Fall back to right arm if visibilities are equal.
+        const useLeft = (lw.visibility > 0.3 && rw.visibility > 0.3)
+            ? (lw.y < rw.y)
+            : (lw.visibility > rw.visibility);
+
         const shoulder = useLeft ? ls : rs;
         const elbow = useLeft ? le : re;
         const wrist = useLeft ? lw : rw;
+        const hip = useLeft ? lh : rh;
 
-        // Guard: skip if the chosen arm landmarks are very low confidence
-        if (shoulder.visibility < 0.4 || elbow.visibility < 0.4 || wrist.visibility < 0.4) {
-            return this._state(Phase.IDLE, this.lastScore, 'cyan', '🎾 Raise your racket arm', {
-                shoulder, elbow, wrist, useLeft
-            });
+        // Skip low-confidence frames but don't reset phase
+        if (wrist.visibility < 0.25) {
+            return this._out('cyan', '🎾 Keep your arm visible', { shoulder, elbow, wrist, useLeft });
         }
 
-        // ── Calculate elbow angle (shoulder–elbow–wrist) ───────────
-        const elbowAngle = _angleDeg(shoulder, elbow, wrist);
-
-        // ── Calculate wrist velocity ──────────────────────────────
+        // ── Update history ────────────────────────────────────────
         this._wristHistory.push({ x: wrist.x, y: wrist.y, t: now });
-        if (this._wristHistory.length > this._historyMax) this._wristHistory.shift();
+        if (this._wristHistory.length > HISTORY_MAX) this._wristHistory.shift();
+        this._lastWristSpeed = this._calcSpeed();
 
-        const wristVel = this._calcWristVelocity(dt);
+        // Track peak elbow angle this swing
+        const elbowAngle = _angle(shoulder, elbow, wrist);
+        if (this.phase === Phase.BACKSWING || this.phase === Phase.CONTACT) {
+            if (elbowAngle > this._peakElbow) this._peakElbow = elbowAngle;
+        }
 
-        // ── Phase state machine ────────────────────────────────────
-        this.prevPhase = this.phase;
-        let nextPhase = this.phase;
-        let score = this.lastScore;
-        let color = 'cyan';
-        let message = '';
+        const elapsed = now - this._phaseStart;
 
-        // Detect phase transitions
-        if (elbowAngle > ELBOW_READY_ANGLE_MIN && wrist.y < shoulder.y) {
-            // Arm is raised and bent — ready stance
-            if (this.phase === Phase.IDLE) {
-                nextPhase = Phase.READY;
-                this._swingStartWristX = wrist.x;
-                this._contactAngle = 0;
-                this._followThroughReached = false;
+        // ── State machine (if/else blocks — no switch/const issues) ──
+
+        if (this.phase === Phase.IDLE) {
+            // Enter READY when wrist is above or near the shoulder line
+            if (wrist.y < shoulder.y + READY_MAX_WRIST_Y_OFFSET) {
+                this.phase = Phase.READY;
+                this._phaseStart = now;
+                this._readyWristPos = { x: wrist.x, y: wrist.y };
+                this._peakElbow = elbowAngle;
             }
-        }
 
-        if (this.phase === Phase.READY && wristVel > WRIST_VELOCITY_SWING) {
-            // Wrist is moving — backswing detected
-            nextPhase = Phase.BACKSWING;
-        }
+        } else if (this.phase === Phase.READY) {
+            // Drop back to IDLE if arm falls well below shoulder
+            if (wrist.y > shoulder.y + 0.12) {
+                this.phase = Phase.IDLE;
+                this._phaseStart = now;
 
-        if (this.phase === Phase.BACKSWING && elbowAngle < ELBOW_CONTACT_ANGLE_MAX) {
-            // Arm near full extension — contact point
-            nextPhase = Phase.CONTACT;
-            this._contactAngle = elbowAngle;
-        }
+                // Enter BACKSWING when wrist has moved sideways from ready position
+            } else {
+                const dx = Math.abs(wrist.x - this._readyWristPos.x);
+                const dy = Math.abs(wrist.y - this._readyWristPos.y);
+                if (dx > BACKSWING_DIST || dy > BACKSWING_DIST) {
+                    this.phase = Phase.BACKSWING;
+                    this._phaseStart = now;
+                    this._peakElbow = elbowAngle;
+                }
+            }
 
-        if (this.phase === Phase.CONTACT) {
-            // Check follow-through: wrist should cross to opposite side of body
-            const crossedBody = useLeft
-                ? wrist.x > shoulder.x + FOLLOW_THROUGH_DIST
-                : wrist.x < shoulder.x - FOLLOW_THROUGH_DIST;
+        } else if (this.phase === Phase.BACKSWING) {
+            // AUTO-ADVANCE to CONTACT after CONTACT_DELAY_MS
+            // This eliminates the need to detect peak velocity.
+            if (elapsed >= CONTACT_DELAY_MS) {
+                this.phase = Phase.CONTACT;
+                this._phaseStart = now;
+                this._contactWristPos = { x: wrist.x, y: wrist.y };
+            }
 
-            if (crossedBody) {
-                this._followThroughReached = true;
-                nextPhase = Phase.FOLLOW_THROUGH;
+        } else if (this.phase === Phase.CONTACT) {
+            // Two ways to trigger FOLLOW THROUGH:
+            //   1. Wrist has moved far enough from contact position
+            //   2. Timeout — give the benefit of the doubt after 1.5s
+            const travX = wrist.x - this._contactWristPos.x;
+            const travY = wrist.y - this._contactWristPos.y;
+            const dist = Math.sqrt(travX * travX + travY * travY);
+
+            if (dist >= FOLLOW_DIST || elapsed >= FOLLOW_TIMEOUT_MS) {
                 this.swingCount += 1;
-                score = this._scoreSwing();
+                this.lastScore = this._score(elbowAngle, dist);
+                this.phase = Phase.FOLLOW_THROUGH;
+                this._phaseStart = now;
+            }
+
+        } else if (this.phase === Phase.FOLLOW_THROUGH) {
+            // Stay in FOLLOW THROUGH briefly, then reset
+            if (elapsed >= RESET_DELAY_MS) {
+                this.phase = Phase.IDLE;
+                this._phaseStart = now;
             }
         }
 
-        if (this.phase === Phase.FOLLOW_THROUGH && wrist.y > elbow.y) {
-            // Arm dropping — reset to idle
-            nextPhase = Phase.IDLE;
+        // ── Build message ─────────────────────────────────────────
+        let color, message;
+        const score = this.lastScore;
+
+        if (this.phase === Phase.IDLE) {
+            color = 'cyan';
+            message = '🎾 Raise your racket arm to start';
+
+        } else if (this.phase === Phase.READY) {
+            color = 'cyan';
+            message = '✅ Good position — swing!';
+
+        } else if (this.phase === Phase.BACKSWING) {
+            // Show countdown so user knows contact is coming
+            const remaining = Math.max(0, CONTACT_DELAY_MS - elapsed);
+            color = 'yellow';
+            message = `🔄 Backswing… contact in ${(remaining / 1000).toFixed(1)}s`;
+
+        } else if (this.phase === Phase.CONTACT) {
+            color = 'green';
+            message = '💥 Contact! Follow through!';
+
+        } else if (this.phase === Phase.FOLLOW_THROUGH) {
+            color = score >= 75 ? 'green' : score >= 50 ? 'yellow' : 'red';
+            message = score >= 75
+                ? `✨ Great swing! (${score}/100)`
+                : score >= 50
+                    ? `👍 Nice swing (${score}/100)`
+                    : `🔁 Try a fuller follow-through (${score}/100)`;
         }
 
-        this.phase = nextPhase;
-        this.lastScore = score;
-
-        // ── Generate message & colour for this phase ───────────────
-        switch (this.phase) {
-            case Phase.IDLE:
-                color = 'cyan';
-                message = '🎾 Ready position — raise your arm';
-                break;
-            case Phase.READY:
-                color = '#00e5ff';
-                message = '✅ Good — start your backswing';
-                break;
-            case Phase.BACKSWING:
-                color = 'yellow';
-                message = '🔄 Backswing — load up power!';
-                break;
-            case Phase.CONTACT:
-                color = elbowAngle < 20 ? 'green' : 'yellow';
-                message = elbowAngle < 20
-                    ? '💥 Great contact — arm extended!'
-                    : '⚠️ Extend more at contact point';
-                break;
-            case Phase.FOLLOW_THROUGH:
-                color = score >= 75 ? 'green' : score >= 50 ? 'yellow' : 'red';
-                message = score >= 75
-                    ? `✨ Perfect follow-through! (${score}/100)`
-                    : score >= 50
-                        ? `👍 Good swing — follow through more (${score}/100)`
-                        : `🔁 Keep your follow-through going (${score}/100)`;
-                break;
-        }
-
-        return this._state(this.phase, score, color, message, { shoulder, elbow, wrist, useLeft });
+        return this._out(color, message, { shoulder, elbow, wrist, useLeft });
     }
 
-    /** Score the just-completed swing out of 100. */
-    _scoreSwing() {
-        let score = 100;
+    // ── Scoring ────────────────────────────────────────────────
 
-        // Penalise poor elbow extension at contact (ideal < 20 deg)
-        const contactPenalty = Math.min(this._contactAngle, 40); // max 40 pts off
-        score -= contactPenalty;
-
-        // Reward follow-through completion
-        if (!this._followThroughReached) score -= 20;
-
-        // Keep in range
-        return Math.max(0, Math.min(100, Math.round(score)));
+    /**
+     * Score 0–100 based on:
+     *   - Peak elbow angle during swing (higher = more extended arm = better)
+     *   - Follow-through distance (how far wrist traveled from contact)
+     */
+    _score(elbowAtFollowThrough, followDist) {
+        // Elbow: 120° = ideal forehand extension → 60 pts
+        const elbowPts = Math.min(60, Math.round((this._peakElbow / 120) * 60));
+        // Follow distance: FOLLOW_DIST × 3 = full 40 pts
+        const distPts = Math.min(40, Math.round((followDist / (FOLLOW_DIST * 3)) * 40));
+        return Math.max(0, Math.min(100, elbowPts + distPts));
     }
 
-    /** Average wrist velocity over last 5 frames. */
-    _calcWristVelocity(dt) {
-        if (this._wristHistory.length < 2 || dt <= 0) return 0;
+    // ── Kinematics ─────────────────────────────────────────────
+
+    _calcSpeed() {
         const h = this._wristHistory;
-        const recent = h.slice(-5);
-        if (recent.length < 2) return 0;
-        const dx = recent[recent.length - 1].x - recent[0].x;
-        const dy = recent[recent.length - 1].y - recent[0].y;
-        const elapsed = recent[recent.length - 1].t - recent[0].t;
-        return Math.sqrt(dx * dx + dy * dy) / Math.max(elapsed, 1);
+        if (h.length < 4) return 0;
+        const a = h[h.length - 4];
+        const b = h[h.length - 1];
+        const dt = b.t - a.t;
+        if (dt <= 0) return 0;
+        const dx = b.x - a.x;
+        const dy = b.y - a.y;
+        return Math.sqrt(dx * dx + dy * dy) / dt;
     }
 
-    /** Build a CoachingState object. */
-    _state(phase, score, color, message, armLandmarks) {
-        return { phase, score, color, message, swingCount: this.swingCount, armLandmarks };
+    // ── Helpers ────────────────────────────────────────────────
+
+    _out(color, message, armLandmarks) {
+        return {
+            phase: this.phase,
+            score: this.lastScore,
+            color,
+            message,
+            swingCount: this.swingCount,
+            armLandmarks: armLandmarks || null,
+        };
     }
 
-    /** Return the wrist position history (for arc rendering). */
     getWristHistory() {
         return [...this._wristHistory];
     }
 }
 
-// ─────────────────────────────────────────────────────────────
-// ── Pure utility functions (no class state) ──────────────────
+// ─── Geometry utility ─────────────────────────────────────────
 
 /**
- * Calculate the angle (in degrees) at the vertex point B formed
- * by three 2D/3D normalised landmark points A–B–C.
- * @param {{x,y}} a  – first point (e.g. shoulder)
- * @param {{x,y}} b  – vertex point (e.g. elbow)
- * @param {{x,y}} c  – third point (e.g. wrist)
- * @returns {number} angle in degrees 0–180
+ * Interior angle at vertex B (degrees).
+ * @param {{x,y}} a @param {{x,y}} b @param {{x,y}} c
  */
-function _angleDeg(a, b, c) {
-    const ba = { x: a.x - b.x, y: a.y - b.y };
-    const bc = { x: c.x - b.x, y: c.y - b.y };
-    const dot = ba.x * bc.x + ba.y * bc.y;
-    const magBa = Math.sqrt(ba.x ** 2 + ba.y ** 2);
-    const magBc = Math.sqrt(bc.x ** 2 + bc.y ** 2);
-    if (magBa === 0 || magBc === 0) return 0;
-    const cos = Math.max(-1, Math.min(1, dot / (magBa * magBc)));
-    return Math.round(Math.acos(cos) * (180 / Math.PI));
+function _angle(a, b, c) {
+    const bax = a.x - b.x, bay = a.y - b.y;
+    const bcx = c.x - b.x, bcy = c.y - b.y;
+    const dot = bax * bcx + bay * bcy;
+    const mag = Math.sqrt((bax * bax + bay * bay) * (bcx * bcx + bcy * bcy));
+    if (mag === 0) return 0;
+    return Math.round(Math.acos(Math.max(-1, Math.min(1, dot / mag))) * (180 / Math.PI));
 }
