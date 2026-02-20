@@ -1,0 +1,275 @@
+/* ============================================================
+   Maestro – AR Tennis Coaching App
+   styles.css — mobile-first, phone-optimised layout
+   ============================================================ */
+
+/* ---------- Reset & root ---------- */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --clr-bg:        #0a0a0f;
+  --clr-glass:     rgba(10, 10, 20, 0.60);
+  --clr-border:    rgba(255,255,255,0.10);
+  --clr-accent:    #00e5ff;       /* cyan */
+  --clr-good:      #00e676;       /* green */
+  --clr-warn:      #ffea00;       /* yellow */
+  --clr-bad:       #ff1744;       /* red */
+  --clr-text:      #f0f4f8;
+  --font:          'Inter', system-ui, sans-serif;
+  --radius:        14px;
+  --safe-bottom:   env(safe-area-inset-bottom, 20px);
+  --safe-top:      env(safe-area-inset-top, 0px);
+}
+
+html, body {
+  width: 100%; height: 100%;
+  overflow: hidden;
+  background: var(--clr-bg);
+  font-family: var(--font);
+  color: var(--clr-text);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ---------- AR viewport wrapper ---------- */
+#ar-container {
+  position: relative;
+  width: 100vw;
+  height: 100dvh;   /* dvh handles mobile browser chrome */
+  overflow: hidden;
+}
+
+/* Camera feed — fills container, object-fit:cover keeps aspect */
+#webcam {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scaleX(-1);  /* mirror for front camera naturalness */
+}
+
+/* Three.js canvas — transparent overlay on top of video */
+#three-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;   /* clicks pass through to buttons below */
+}
+
+/* ---------- Permission / splash screen ---------- */
+#splash-screen {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  background: linear-gradient(160deg, #0a0a1a 0%, #0d1b2a 100%);
+  z-index: 100;
+  padding: 40px 32px;
+  text-align: center;
+  transition: opacity 0.5s ease;
+}
+#splash-screen.hidden { opacity: 0; pointer-events: none; }
+
+.splash-logo {
+  font-size: 2.6rem;
+  font-weight: 800;
+  letter-spacing: -1px;
+  background: linear-gradient(90deg, var(--clr-accent), #7c4dff);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.splash-sub {
+  font-size: 0.95rem;
+  color: rgba(255,255,255,0.55);
+  line-height: 1.6;
+  max-width: 280px;
+}
+
+#start-btn {
+  padding: 16px 40px;
+  font-size: 1rem;
+  font-weight: 700;
+  border: none;
+  border-radius: 50px;
+  background: linear-gradient(135deg, var(--clr-accent) 0%, #1565c0 100%);
+  color: #fff;
+  cursor: pointer;
+  letter-spacing: 0.5px;
+  box-shadow: 0 0 30px rgba(0,229,255,0.35);
+  transition: transform 0.15s, box-shadow 0.15s;
+  min-height: 54px;
+}
+#start-btn:active { transform: scale(0.96); box-shadow: 0 0 12px rgba(0,229,255,0.2); }
+
+/* ---------- HUD overlay ---------- */
+#hud {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: calc(var(--safe-top) + 12px) 16px calc(var(--safe-bottom) + 12px);
+}
+
+/* Top bar */
+#hud-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+/* Phase badge */
+#phase-badge {
+  background: var(--clr-glass);
+  border: 1px solid var(--clr-border);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-radius: 50px;
+  padding: 6px 16px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--clr-accent);
+  transition: color 0.3s;
+}
+
+/* Camera switch button — top right, pointer-events ON */
+#camera-btn {
+  pointer-events: all;
+  width: 44px; height: 44px;
+  border-radius: 50%;
+  background: var(--clr-glass);
+  border: 1px solid var(--clr-border);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  color: #fff;
+  font-size: 1.2rem;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: transform 0.2s;
+}
+#camera-btn:active { transform: rotate(180deg); }
+
+/* Bottom coaching panel */
+#coaching-panel {
+  background: var(--clr-glass);
+  border: 1px solid var(--clr-border);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-radius: var(--radius);
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Coach message */
+#coach-message {
+  font-size: 1.05rem;
+  font-weight: 600;
+  text-align: center;
+  min-height: 1.4em;
+  transition: color 0.4s;
+}
+
+/* Score row */
+.score-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.score-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.5);
+  white-space: nowrap;
+}
+.score-track {
+  flex: 1;
+  height: 6px;
+  background: rgba(255,255,255,0.10);
+  border-radius: 3px;
+  overflow: hidden;
+}
+#score-bar {
+  height: 100%;
+  width: 0%;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--clr-good), var(--clr-accent));
+  transition: width 0.5s cubic-bezier(0.4,0,0.2,1), background 0.4s;
+}
+#score-value {
+  font-size: 0.85rem;
+  font-weight: 800;
+  min-width: 34px;
+  text-align: right;
+  color: var(--clr-accent);
+  transition: color 0.4s;
+}
+
+/* Swing count */
+#swing-counter {
+  font-size: 0.72rem;
+  color: rgba(255,255,255,0.4);
+  text-align: center;
+  letter-spacing: 0.5px;
+}
+
+/* ---------- State colours ---------- */
+.state-good  { color: var(--clr-good) !important; }
+.state-warn  { color: var(--clr-warn) !important; }
+.state-bad   { color: var(--clr-bad)  !important; }
+
+/* Score bar colours */
+#score-bar.state-good { background: linear-gradient(90deg, var(--clr-good), #00bcd4); }
+#score-bar.state-warn { background: linear-gradient(90deg, var(--clr-warn), #ff9800); }
+#score-bar.state-bad  { background: linear-gradient(90deg, var(--clr-bad),  #e040fb); }
+
+/* ---------- Loading indicator ---------- */
+#loading-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(10,10,20,0.85);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  z-index: 80;
+  transition: opacity 0.4s;
+}
+#loading-overlay.hidden { opacity: 0; pointer-events: none; }
+
+.loader-ring {
+  width: 48px; height: 48px;
+  border: 3px solid rgba(0,229,255,0.2);
+  border-top-color: var(--clr-accent);
+  border-radius: 50%;
+  animation: spin 0.9s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.loader-text {
+  font-size: 0.85rem;
+  color: rgba(255,255,255,0.5);
+  letter-spacing: 0.5px;
+}
+
+/* ---------- Responsive tweaks ---------- */
+@media (min-width: 600px) {
+  /* On tablets/desktop, cap the coaching panel width */
+  #hud {
+    padding-left: calc(50vw - 280px);
+    padding-right: calc(50vw - 280px);
+  }
+}

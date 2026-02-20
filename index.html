@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="description" content="Maestro — Real-time AR tennis coaching in your browser. No install required." />
+    <meta name="theme-color" content="#0a0a0f" />
+    <!-- iOS fullscreen hints -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <title>Maestro — AR Tennis Coach</title>
+
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet" />
+
+    <!-- App styles -->
+    <link rel="stylesheet" href="css/styles.css" />
+
+    <!--
+    ╔══════════════════════════════════════════════════════════╗
+    ║  Three.js — ESM via import map (no bundler needed)      ║
+    ║  Using jsDelivr CDN for reliability and HTTPS.          ║
+    ╚══════════════════════════════════════════════════════════╝
+    Import maps allow us to write `import * as THREE from 'three'`
+    in our ES module scripts instead of full CDN URLs.
+  -->
+    <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/",
+        "@mediapipe/tasks-vision": "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs"
+      }
+    }
+  </script>
+
+    <!--
+    MediaPipe Tasks Vision is loaded via the import map above as an ES module.
+    No separate <script> tag needed — ar-tracking.js imports it directly.
+  -->
+</head>
+
+<body>
+    <!-- ══════════════════════════════════════════════
+       AR VIEWPORT — video feed + Three.js canvas
+       ══════════════════════════════════════════════ -->
+    <div id="ar-container">
+
+        <!-- Live camera feed — CSS-mirrored via scaleX(-1) in styles.css -->
+        <video id="webcam" autoplay playsinline muted></video>
+
+        <!-- Three.js transparent overlay canvas -->
+        <canvas id="three-canvas"></canvas>
+
+        <!-- ── HUD ─────────────────────────────────────── -->
+        <div id="hud" aria-live="polite" aria-label="Coaching information">
+
+            <!-- Top bar: phase badge + camera switch -->
+            <div id="hud-top">
+                <span id="phase-badge" role="status">IDLE</span>
+                <button id="camera-btn" aria-label="Switch camera" title="Switch front / rear camera">⟳</button>
+            </div>
+
+            <!-- Bottom coaching panel -->
+            <div id="coaching-panel" role="region" aria-label="Coaching panel">
+
+                <!-- Coach message text -->
+                <div id="coach-message">🎾 Tap Start to begin</div>
+
+                <!-- Score bar -->
+                <div class="score-row">
+                    <span class="score-label">FORM</span>
+                    <div class="score-track">
+                        <div id="score-bar" style="width:0%"></div>
+                    </div>
+                    <span id="score-value">0</span>
+                </div>
+
+                <!-- Swing counter -->
+                <div id="swing-counter">No swings yet — start your first swing!</div>
+
+            </div><!-- /coaching-panel -->
+        </div><!-- /hud -->
+
+        <!-- ── Loading indicator ───────────────────────── -->
+        <div id="loading-overlay" aria-live="polite">
+            <div class="loader-ring"></div>
+            <span class="loader-text">Loading…</span>
+        </div>
+
+        <!-- ── Splash / permission screen ─────────────── -->
+        <div id="splash-screen" role="dialog" aria-modal="true" aria-labelledby="splash-title">
+            <div class="splash-logo" id="splash-title">Maestro</div>
+            <p class="splash-sub">
+                Your real-time AR tennis coach.<br />
+                Points your phone's camera at yourself and Maestro will analyse your swing form live.
+            </p>
+            <button id="start-btn" autofocus>Start coaching →</button>
+            <p class="splash-sub" style="font-size:0.75rem; margin-top:8px;">
+                Camera access required · No data leaves your device
+            </p>
+        </div><!-- /splash-screen -->
+
+    </div><!-- /ar-container -->
+
+    <!--
+    ╔══════════════════════════════════════════════════════════╗
+    ║  Main application script — ES module                   ║
+    ║                                                          ║
+    ║  Architecture:                                           ║
+    ║    ARTracking  ──→  coaching-engine.js                  ║
+    ║                         │                               ║
+    ║         ┌───────────────┤                               ║
+    ║         ↓               ↓                               ║
+    ║    three-renderer.js   ui.js                            ║
+    ║                                                          ║
+    ║  Each module is completely independent — swap any one   ║
+    ║  without touching the others.                           ║
+    ╚══════════════════════════════════════════════════════════╝
+  -->
+    <script type="module">
+        // ── Imports ──────────────────────────────────────────────────────
+        import { ARTracking } from './js/ar-tracking.js';
+        import { CoachingEngine } from './js/coaching-engine.js';
+        import { ThreeRenderer } from './js/three-renderer.js';
+        import { UI } from './js/ui.js';
+
+        // ── DOM references ───────────────────────────────────────────────
+        const videoEl = document.getElementById('webcam');
+        const canvasEl = document.getElementById('three-canvas');
+        const startBtn = document.getElementById('start-btn');
+        const splashEl = document.getElementById('splash-screen');
+        const cameraBtn = document.getElementById('camera-btn');
+        const loadingEl = document.getElementById('loading-overlay');
+
+        // ── Module instances ─────────────────────────────────────────────
+        const ui = new UI();
+        let coachingEngine = null;
+        let threeRenderer = null;
+        let arTracking = null;
+
+        // ── Initialise Three.js renderer immediately (no async needed) ───
+        // We do this before the user taps Start so the canvas is ready.
+        function initRenderer() {
+            // Size the canvas to match its CSS layout size
+            canvasEl.width = canvasEl.clientWidth * window.devicePixelRatio;
+            canvasEl.height = canvasEl.clientHeight * window.devicePixelRatio;
+            threeRenderer = new ThreeRenderer(canvasEl);
+        }
+
+        // ── Start button handler ─────────────────────────────────────────
+        startBtn.addEventListener('click', async () => {
+            // Dismiss splash
+            splashEl.classList.add('hidden');
+
+            // Show loading state
+            ui.showLoading('Requesting camera…');
+
+            try {
+                // Initialise Three.js renderer
+                initRenderer();
+
+                // Show second loading phase
+                ui.showLoading('Loading pose model – first run may take a moment…');
+
+                // ── Pose result callback ─────────────────────────────────────
+                // This is called by ARTracking on every detected frame.
+                // It is the ONLY connection point between tracking and coaching.
+                coachingEngine = new CoachingEngine();
+
+                function onPoseResult(landmarks, worldLandmarks) {
+                    // 1. Analyse pose → get coaching state
+                    const coachingState = coachingEngine.analyse(landmarks);
+
+                    // 2. Get wrist history for arc rendering
+                    const wristHistory = coachingEngine.getWristHistory();
+
+                    // 3. Render Three.js overlays
+                    threeRenderer.render(landmarks, coachingState, wristHistory);
+
+                    // 4. Update HUD
+                    ui.update(coachingState);
+                }
+
+                // ── Start AR tracking ────────────────────────────────────────
+                arTracking = new ARTracking(videoEl, onPoseResult);
+                await arTracking.start();
+
+                // Hide loading, we're live!
+                ui.hideLoading();
+
+            } catch (err) {
+                console.error('[Maestro] Startup failed:', err);
+                ui.showLoading(`Error: ${err.message}. Please check camera permissions and reload.`);
+            }
+        });
+
+        // ── Camera switch handler ────────────────────────────────────────
+        cameraBtn.addEventListener('click', async () => {
+            if (!arTracking) return;
+            cameraBtn.style.opacity = '0.5';
+            cameraBtn.disabled = true;
+            try {
+                await arTracking.switchCamera();
+            } finally {
+                cameraBtn.style.opacity = '1';
+                cameraBtn.disabled = false;
+            }
+        });
+
+        // ── Handle page visibility changes ───────────────────────────────
+        // Stop pose detection when the app is backgrounded to save battery.
+        document.addEventListener('visibilitychange', () => {
+            if (!arTracking) return;
+            if (document.hidden) {
+                arTracking.stop();
+            } else {
+                // Restart detection on foreground
+                arTracking.start().catch(console.error);
+            }
+        });
+
+        // ── Hide loading overlay initially until Start is clicked ────────
+        // (We show a splash screen instead on first load.)
+        loadingEl.classList.add('hidden');
+
+    </script>
+</body>
+
+</html>
