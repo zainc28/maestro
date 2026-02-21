@@ -19,6 +19,9 @@ public class CoachFlow : MonoBehaviour
     public SwingRecorder swingRecorder;
     public TMP_Text feedbackText;
 
+    [Header("Ball")]
+    public BallSpawner ballSpawner;
+
     [Header("UI Panels")]
     public GameObject readyPanel;
     public GameObject drillPanel;
@@ -67,7 +70,6 @@ public class CoachFlow : MonoBehaviour
         readyPanel.SetActive(true);
     }
 
-    // Yes button routes to different actions depending on state
     public void OnReadyYes()
     {
         if (currentState == AppState.BallMode)
@@ -87,7 +89,6 @@ public class CoachFlow : MonoBehaviour
     {
         if (currentState == AppState.BallMode)
         {
-            // They don't want balls yet, just keep coaching
             readyPanel.SetActive(false);
             voiceFeedback?.Speak("No problem, keep practicing!");
             if (feedbackText) feedbackText.text = "Your turn! Press trigger to swing.";
@@ -127,7 +128,6 @@ public class CoachFlow : MonoBehaviour
     {
         voiceFeedback?.Speak("Now you try. Press the trigger to record your swing.");
         if (feedbackText) feedbackText.text = "Your turn! Press trigger to swing.";
-        // coachingPanel.SetActive(true);
     }
 
     public void RegisterGoodSwing()
@@ -151,6 +151,6 @@ public class CoachFlow : MonoBehaviour
         readyPanel.SetActive(false);
         voiceFeedback?.Speak("Here we go!");
         if (feedbackText) feedbackText.text = "Return the ball!";
-        // BallSpawner will handle the rest
+        ballSpawner?.StartBallMode();
     }
 }

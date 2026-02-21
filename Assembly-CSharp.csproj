@@ -63,6 +63,8 @@
   <ItemGroup>
     <Compile Include="Assets\Scripts\VoiceFeedback.cs" />
     <Compile Include="Assets\TutorialInfo\Scripts\Readme.cs" />
+    <Compile Include="Assets\Scripts\BallSpawner.cs" />
+    <Compile Include="Assets\Scripts\TennisBall.cs" />
     <Compile Include="Assets\Scripts\CoachFlow.cs" />
     <Compile Include="Assets\Scripts\SwingRecorder.cs" />
   </ItemGroup>
