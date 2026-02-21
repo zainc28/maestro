@@ -1,0 +1,16 @@
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Bb]uild/
+[Bb]uilds/
+[Ll]ogs/
+[Uu]ser[Ss]ettings/
+*.pidb
+*.suo
+*.user
+*.userprefs
+*.unityproj
+*.booproj
+.DS_Store
+*.pdb
+*.mdb
