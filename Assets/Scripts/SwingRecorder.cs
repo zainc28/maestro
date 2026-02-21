@@ -17,7 +17,13 @@ public class SwingRecorder : MonoBehaviour
     [Header("UI")]
     public TMP_Text feedbackText;
 
-    [Header("Ideal Path (set at runtime or paste points here)")]
+    [Header("Voice")]
+    public VoiceFeedback voiceFeedback;
+
+    [Header("Flow")]
+    public CoachFlow coachFlow;
+
+    [Header("Ideal Path")]
     public List<Vector3> idealPath = new List<Vector3>();
 
     private List<Vector3> recordedPath = new List<Vector3>();
@@ -58,6 +64,7 @@ public class SwingRecorder : MonoBehaviour
         recordedPath.Clear();
         Debug.Log("Recording started...");
         if (feedbackText) feedbackText.text = "Recording... swing now!";
+        voiceFeedback?.Speak("Recording started. Swing now.");
     }
 
     void StopRecordingAndEvaluate()
@@ -69,7 +76,10 @@ public class SwingRecorder : MonoBehaviour
         if (idealPath.Count > 0)
             EvaluateSwing();
         else
+        {
             DrawLine(recordedPath, goodColor);
+            voiceFeedback?.Speak("Swing recorded. No ideal path set yet.");
+        }
     }
 
     void EvaluateSwing()
@@ -81,11 +91,39 @@ public class SwingRecorder : MonoBehaviour
         DrawLine(recordedPath, result);
 
         string feedback = deviation < threshold
-            ? $"Good swing! Avg deviation: {deviation:F2}m"
-            : $"Adjust your swing. Avg deviation: {deviation:F2}m";
+            ? "Good swing! Great form."
+            : GetSpecificFeedback();
 
         Debug.Log(feedback);
         if (feedbackText) feedbackText.text = feedback;
+        voiceFeedback?.Speak(feedback);
+
+        // Report good swing to flow manager
+        if (deviation < threshold)
+            coachFlow?.RegisterGoodSwing();
+    }
+
+    string GetSpecificFeedback()
+    {
+        if (recordedPath.Count < 2) return "Swing too short. Try again.";
+
+        Vector3 start = recordedPath[0];
+        Vector3 end = recordedPath[recordedPath.Count - 1];
+        Vector3 lowest = recordedPath[0];
+
+        foreach (Vector3 p in recordedPath)
+            if (p.y < lowest.y) lowest = p;
+
+        if (lowest.y < start.y - 0.5f)
+            return "Keep your racket higher at impact.";
+
+        if (Vector3.Distance(start, end) < 0.3f)
+            return "Follow through more on your swing.";
+
+        if (Mathf.Abs(end.x - start.x) > 0.8f)
+            return "Straighten your swing path.";
+
+        return "Adjust your swing. Keep practicing.";
     }
 
     float CalculateDeviation(List<Vector3> recorded, List<Vector3> ideal)
@@ -115,5 +153,6 @@ public class SwingRecorder : MonoBehaviour
     {
         idealPath = new List<Vector3>(recordedPath);
         Debug.Log($"Ideal path saved with {idealPath.Count} points.");
+        voiceFeedback?.Speak("Ideal path saved.");
     }
 }
