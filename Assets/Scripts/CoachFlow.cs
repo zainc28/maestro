@@ -67,8 +67,15 @@ public class CoachFlow : MonoBehaviour
         readyPanel.SetActive(true);
     }
 
+    // Yes button routes to different actions depending on state
     public void OnReadyYes()
     {
+        if (currentState == AppState.BallMode)
+        {
+            OnBallModeYes();
+            return;
+        }
+
         readyPanel.SetActive(false);
         voiceFeedback?.Speak("Great! What would you like to practice today?");
         if (drillPanelText) drillPanelText.text = "Choose what to practice:";
@@ -78,6 +85,16 @@ public class CoachFlow : MonoBehaviour
 
     public void OnReadyNo()
     {
+        if (currentState == AppState.BallMode)
+        {
+            // They don't want balls yet, just keep coaching
+            readyPanel.SetActive(false);
+            voiceFeedback?.Speak("No problem, keep practicing!");
+            if (feedbackText) feedbackText.text = "Your turn! Press trigger to swing.";
+            currentState = AppState.Coaching;
+            return;
+        }
+
         readyPanel.SetActive(false);
         voiceFeedback?.Speak("No problem! Come back when you're ready.");
         if (feedbackText) feedbackText.text = "See you next time!";
@@ -110,7 +127,7 @@ public class CoachFlow : MonoBehaviour
     {
         voiceFeedback?.Speak("Now you try. Press the trigger to record your swing.");
         if (feedbackText) feedbackText.text = "Your turn! Press trigger to swing.";
-        coachingPanel.SetActive(true);
+        // coachingPanel.SetActive(true);
     }
 
     public void RegisterGoodSwing()
@@ -122,11 +139,11 @@ public class CoachFlow : MonoBehaviour
 
     void PromptBallMode()
     {
+        currentState = AppState.BallMode;
         voiceFeedback?.Speak("Excellent! You're ready. Want to try returning some real balls?");
         if (readyPanelText) readyPanelText.text = "Ready for real balls?";
         if (feedbackText) feedbackText.text = "Ready for real balls?";
         readyPanel.SetActive(true);
-        currentState = AppState.BallMode;
     }
 
     public void OnBallModeYes()
@@ -134,5 +151,6 @@ public class CoachFlow : MonoBehaviour
         readyPanel.SetActive(false);
         voiceFeedback?.Speak("Here we go!");
         if (feedbackText) feedbackText.text = "Return the ball!";
+        // BallSpawner will handle the rest
     }
 }
