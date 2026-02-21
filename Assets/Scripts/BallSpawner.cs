@@ -32,12 +32,16 @@ public class BallSpawner : MonoBehaviour
         currentBall = Instantiate(ballPrefab, spawnPoint.position, Quaternion.identity);
 
         // Calculate direction toward player
+        Vector3 targetPos = playerTarget.position;
         Vector3 direction = (playerTarget.position - spawnPoint.position).normalized;
+        // Aim at player's chest height instead of rig root
+        //Vector3 targetPos = playerTarget.position + Vector3.up * 1.2f;
+        //Vector3 direction = (targetPos - spawnPoint.position).normalized;
 
         // Add slight random vertical variation
         direction += new Vector3(
-            Random.Range(-0.1f, 0.1f),
-            Random.Range(-0.05f, 0.1f),
+            Random.Range(-0.03f, 0.03f),
+            Random.Range(-0.02f, 0.05f),
             0f
         );
 

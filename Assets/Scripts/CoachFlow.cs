@@ -48,6 +48,14 @@ public class CoachFlow : MonoBehaviour
         EnterIntro();
     }
 
+    void Update()
+    {
+        // TESTING ONLY: Press B to bypass swing deviation check and jump to ball mode
+        // Remove this before final build
+        if (Input.GetKeyDown(KeyCode.B))
+            PromptBallMode();
+    }
+
     void EnterIntro()
     {
         currentState = AppState.Intro;

@@ -8,7 +8,7 @@ public class TennisBall : MonoBehaviour
 
     void Start()
     {
-        spawner = FindObjectOfType<BallSpawner>();
+        spawner = Object.FindFirstObjectByType<BallSpawner>();
         Destroy(gameObject, lifetime);
     }
 
