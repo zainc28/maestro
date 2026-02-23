@@ -1,30 +1,9 @@
 # Maestro
+XR Sports coaching app for Meta
+MVP Phase focused on Tennis
 
-Hacked 2026 -- Team Bedtime
-
-XR Sports training, starting with Tennis
-
-Includes:
-Virtual tennis environment, swing path tracking, live coaching
-
-
-Steps:
-Set up Unity/Quest (unity 6, Meta XR SDK, Meta quest link and setup)
-
-Controller Tracking + LineRenderer
-
-Ideal Path + Comparison Logic
-
-Coach Avatar
-
-Integration + Virtual Environment
-
-
-Demo Flow
-    - Coaching is very expensive (coaches + courts)
-    - Coaching is inaccesible (can use your phone as a vr headset) 
-    - Practice makes perfect 
-    Solution? Get accurate feedback better than coaches, in real time, and cheaper with 
-    future additions of being able to use it with just your phone in a cardboard headset 
-    using Maestro.
-
+## Features
+- Fully interactive virtual tennis environment 
+- Swing analysis engine that classifies technique across 15+ shot types using a trained pose estimation model, delivering real-time biomechanical feedback 
+- Uses dynamic swing deviation system comparing live 3D controller trajectory against model-predicted ideal paths, rendering color-coded overlays with sub-100ms latency via custom Unity shaders
+- Spatial AI coaching pipeline with an animated humanoid avatar that adapts feedback cues based on detected swing phase and player skill level
