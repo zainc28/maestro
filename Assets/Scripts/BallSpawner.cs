@@ -10,6 +10,7 @@ public class BallSpawner : MonoBehaviour
 
     [Header("Target")]
     public Transform playerTarget; // assign OVRCameraRig
+    public float targetHeightOffset = 1.2f; // chest height above rig root
 
     private GameObject currentBall;
     private bool gameActive = false;
@@ -24,28 +25,23 @@ public class BallSpawner : MonoBehaviour
     {
         if (!gameActive) return;
 
-        // Clean up previous ball
         if (currentBall != null)
             Destroy(currentBall);
 
-        // Spawn new ball at spawn point
         currentBall = Instantiate(ballPrefab, spawnPoint.position, Quaternion.identity);
 
-        // Calculate direction toward player
-        Vector3 targetPos = playerTarget.position;
-        Vector3 direction = (playerTarget.position - spawnPoint.position).normalized;
-        // Aim at player's chest height instead of rig root
-        //Vector3 targetPos = playerTarget.position + Vector3.up * 1.2f;
-        //Vector3 direction = (targetPos - spawnPoint.position).normalized;
+        // Aim at player's chest, not rig root (which is often at floor level)
+        Vector3 targetPos = playerTarget.position + Vector3.up * targetHeightOffset;
+        Vector3 direction = (targetPos - spawnPoint.position).normalized;
 
-        // Add slight random vertical variation
+        // Tight random variation — keeps balls hittable
         direction += new Vector3(
-            Random.Range(-0.03f, 0.03f),
-            Random.Range(-0.02f, 0.05f),
+            Random.Range(-0.02f, 0.02f),  // tiny left/right
+            Random.Range(-0.01f, 0.02f),  // slight vertical, biased up
             0f
         );
+        direction.Normalize();
 
-        // Launch it
         Rigidbody rb = currentBall.GetComponent<Rigidbody>();
         if (rb != null)
             rb.linearVelocity = direction * ballSpeed;
@@ -53,8 +49,6 @@ public class BallSpawner : MonoBehaviour
 
     public void OnBallHit()
     {
-        // Called when player hits the ball
-        // Wait then spawn the next one
         Invoke(nameof(SpawnBall), ballDelay);
     }
 

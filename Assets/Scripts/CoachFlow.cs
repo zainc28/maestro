@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 using TMPro;
 using UnityEngine.UI;
 
@@ -48,12 +48,20 @@ public class CoachFlow : MonoBehaviour
         EnterIntro();
     }
 
+    //void Update()
+    //{
+    //    // TESTING ONLY: Press B to bypass swing deviation check and jump to ball mode
+    //    // Remove this before final build
+    //    if (Input.GetKeyDown(KeyCode.B))
+    //        PromptBallMode();
+    //}
     void Update()
     {
-        // TESTING ONLY: Press B to bypass swing deviation check and jump to ball mode
-        // Remove this before final build
-        if (Input.GetKeyDown(KeyCode.B))
-            PromptBallMode();
+        if (OVRInput.GetDown(OVRInput.Button.One)) // A → start backhand coaching
+            OnSelectBackhand();
+
+        if (OVRInput.GetDown(OVRInput.Button.Two)) // B → start balls immediately
+            OnBallModeYes();
     }
 
     void EnterIntro()

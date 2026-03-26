@@ -1,12 +1,12 @@
 # Maestro
+Originally Hacked 2026 
+Solo Project
 
-Hacked 2026 -- Team Bedtime
-
-Extended Reality Sports training, (prototype includes Tennis)
+Extended Reality Sports training, (mvp Tennis)
 
 ### Includes:
 Virtual tennis environment, ideal swing form tracking and deviation (geometry based as of
-current, if time possibly ml based implementation), live coaching, real physics tennis ball practice
+current), live voice coaching, real physics tennis ball practice
 
 ### Tech 
 Unity 6 (with Meta XR SDK)
@@ -20,5 +20,6 @@ C#
 
 ### Implementations
     - Cardboard VR headset that uses your phone
-    - Other sports
-    - A piece of tech that you can stick onto any sport equipment to replace the controllers 
+    - Other sports + more shot types/form types
+    - Instead of quest controllers maybe a controller you can stick onto sports equipment of your choice 
+    

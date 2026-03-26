@@ -26,6 +26,9 @@ extern void CoachFlow_RegisterGoodSwing_m3B406B34177EBC48ECB0539B23A21618F1B15D6
 extern void CoachFlow_PromptBallMode_m4FF398FEBA1C86C6CA39D9EA89A8EB6982CD8041 (void);
 extern void CoachFlow_OnBallModeYes_m29325F71581F520068B1C8FD8846D17E008494CF (void);
 extern void CoachFlow__ctor_m86C50A05A9C5328D272C22AAB715531291FBEE74 (void);
+extern void LaserPointer_Start_m3DFB81C9C9341B90A008C9933D67D51865903F9B (void);
+extern void LaserPointer_Update_mAADA5F9ECB2E2688A10A03BDD9B93486EAA77637 (void);
+extern void LaserPointer__ctor_mA0704D372BF57678ED5BD16AC1F265DA30199319 (void);
 extern void SwingRecorder_Update_m8A28261B206B753E7BC230DF1A16B773740B266E (void);
 extern void SwingRecorder_StartRecording_mC37C3641919D142D451F15EA7BFF96BE7317974A (void);
 extern void SwingRecorder_StopRecordingAndEvaluate_mD2FEC913775B52DDFF59622A22B1CB32EE7480AD (void);
@@ -46,7 +49,7 @@ extern void Readme__ctor_m69C325C4C171DCB0312B646A9034AA91EA8C39C6 (void);
 extern void Section__ctor_m5F732533E4DFC0167D965E5F5DB332E46055399B (void);
 extern void UnitySourceGeneratedAssemblyMonoScriptTypes_v1_Get_mBEB95BEB954BB63E9710BBC7AD5E78C4CB0A0033 (void);
 extern void UnitySourceGeneratedAssemblyMonoScriptTypes_v1__ctor_mE70FB23ACC1EA12ABC948AA22C2E78B2D0AA39B1 (void);
-static Il2CppMethodPointer s_methodPointers[39] = 
+static Il2CppMethodPointer s_methodPointers[42] = 
 {
 	BallSpawner_StartBallMode_mEFBDC9C764976B90889341FA1F6B5AE397FBE610,
 	BallSpawner_SpawnBall_mD8CA8C46A65E604F014B60F70ABEC90A2394B782,
@@ -67,6 +70,9 @@ static Il2CppMethodPointer s_methodPointers[39] =
 	CoachFlow_PromptBallMode_m4FF398FEBA1C86C6CA39D9EA89A8EB6982CD8041,
 	CoachFlow_OnBallModeYes_m29325F71581F520068B1C8FD8846D17E008494CF,
 	CoachFlow__ctor_m86C50A05A9C5328D272C22AAB715531291FBEE74,
+	LaserPointer_Start_m3DFB81C9C9341B90A008C9933D67D51865903F9B,
+	LaserPointer_Update_mAADA5F9ECB2E2688A10A03BDD9B93486EAA77637,
+	LaserPointer__ctor_mA0704D372BF57678ED5BD16AC1F265DA30199319,
 	SwingRecorder_Update_m8A28261B206B753E7BC230DF1A16B773740B266E,
 	SwingRecorder_StartRecording_mC37C3641919D142D451F15EA7BFF96BE7317974A,
 	SwingRecorder_StopRecordingAndEvaluate_mD2FEC913775B52DDFF59622A22B1CB32EE7480AD,
@@ -88,8 +94,11 @@ static Il2CppMethodPointer s_methodPointers[39] =
 	UnitySourceGeneratedAssemblyMonoScriptTypes_v1_Get_mBEB95BEB954BB63E9710BBC7AD5E78C4CB0A0033,
 	UnitySourceGeneratedAssemblyMonoScriptTypes_v1__ctor_mE70FB23ACC1EA12ABC948AA22C2E78B2D0AA39B1,
 };
-static const int32_t s_InvokerIndices[39] = 
+static const int32_t s_InvokerIndices[42] = 
 {
+	20108,
+	20108,
+	20108,
 	20108,
 	20108,
 	20108,
@@ -134,7 +143,7 @@ IL2CPP_EXTERN_C const Il2CppCodeGenModule g_AssemblyU2DCSharp_CodeGenModule;
 const Il2CppCodeGenModule g_AssemblyU2DCSharp_CodeGenModule = 
 {
 	"Assembly-CSharp.dll",
-	39,
+	42,
 	s_methodPointers,
 	0,
 	NULL,

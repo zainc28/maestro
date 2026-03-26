@@ -1,3 +1,4 @@
+# --- Unity Folders ---
 [Ll]ibrary/
 [Tt]emp/
 [Oo]bj/
@@ -5,12 +6,23 @@
 [Bb]uilds/
 [Ll]ogs/
 [Uu]ser[Ss]ettings/
-*.pidb
+[Mm]emoryCaptures/
+
+# --- MSVC / Visual Studio ---
+.vs/
+*.csproj
+*.sln
 *.suo
 *.user
 *.userprefs
-*.unityproj
-*.booproj
-.DS_Store
-*.pdb
-*.mdb
+*.pidb
+*.polyql
+*.svclog
+*.coment
+
+# --- Build Outputs ---
+*.apk
+*.aab
+*.unitypackage
+# Specific to your screenshot
+Maestro*.apk
